@@ -41,53 +41,49 @@ int get_file_information(const char* path, const char* filename, file_info* file
  */
 file_info* get_directory_information(const char* path)
 {
-    if (!path) return NULL;
+    /*if (!path) 
+		return NULL;*/		// What are you catching here? This would only fire if null was passed.
 
     DIR* dir = opendir(path);
-    if (!dir) return NULL;
+    if (!dir) 
+		return NULL;
 
     struct dirent* ent;
-    file_info* head = NULL;
-    file_info* tail = NULL;
+	file_info* currentNode = malloc(sizeof(file_info));
+    //file_info* head = NULL;			// The head should just live in main IMO
+    //file_info* tail = NULL;			// I don't see a need for tail
     int idx = 0;
 
-    while ((ent = readdir(dir)) != NULL) {
-        /* skip "." and ".." */
-        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
+    while ((ent = readdir(dir)) != NULL) 
+	{
+        /* skip "." and ".." Otherwise, do the work */
+        if (!(strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)) 
+		{
+			//memset(node, 0, sizeof(file_info));		// Why?	
+			strncpy(currentNode->filename, ent->d_name, MAX_FILENAME_LEN-1);
+			currentNode->filename[MAX_FILENAME_LEN-1] = '\0';
+			strncpy(currentNode->fileLocation, path, MAX_PATH_LEN-1);
+			currentNode->fileLocation[MAX_PATH_LEN-1] = '\0';
+			currentNode->number = idx++;
+			currentNode->next = malloc(sizeof(file_info)); // I don't think we have a choice here and need to rely on field data to catch an empty node.
 
-        file_info* node = malloc(sizeof(file_info));
-        if (!node) {
-            // free already allocated nodes
-            file_info* cur = head;
-            while (cur) { file_info* tmp = cur->next; free(cur); cur = tmp; }
-            closedir(dir);
-            return NULL;
-        }
-        memset(node, 0, sizeof(file_info));
-        strncpy(node->filename, ent->d_name, MAX_FILENAME_LEN-1);
-        node->filename[MAX_FILENAME_LEN-1] = '\0';
-        strncpy(node->fileLocation, path, MAX_PATH_LEN-1);
-        node->fileLocation[MAX_PATH_LEN-1] = '\0';
-        node->number = idx++;
-        node->next = NULL;
-
-        /* try to fill stat info */
-        char fullpath[MAX_PATH_LEN + MAX_FILENAME_LEN + 2];
-        snprintf(fullpath, sizeof(fullpath), "%s/%s", path, ent->d_name);
-        struct stat st;
-        if (stat(fullpath, &st) == 0) {
-            node->mode = st.st_mode;
-            node->userID = st.st_uid;
-            node->groupID = st.st_gid;
-        } else {
-            node->mode = 0;
-            node->userID = -1;
-            node->groupID = -1;
-        }
-
-        if (!head) head = tail = node;
-        else { tail->next = node; tail = node; }
-    }
+			/* try to fill stat info */
+			char fullpath[MAX_PATH_LEN + MAX_FILENAME_LEN + 2];
+			snprintf(fullpath, sizeof(fullpath), "%s/%s", path, ent->d_name);
+			struct stat st;
+			if (stat(fullpath, &st) == 0) {
+				currentNode->mode = st.st_mode;
+				currentNode->userID = st.st_uid;
+				currentNode->groupID = st.st_gid;
+			} else {
+				currentNode->mode = 0;
+				currentNode->userID = -1;
+				currentNode->groupID = -1;
+			}
+			currentNode = currentNode->next;
+		}
+	}
+	currentNode->number = -1; // I think this is the easiest way to catch the end of the linked list
 
     closedir(dir);
     return head;

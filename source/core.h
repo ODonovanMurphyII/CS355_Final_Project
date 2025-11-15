@@ -26,6 +26,8 @@ int get_file_information(const char* path, const char* filename, file_info* file
 /* returns head of list (caller frees) or NULL on error */
 file_info* get_directory_information(const char* path);
 
+
+
 /* Encryption helpers (simple XOR - reversible) */
 int xor_encrypt_file(const char* input_path, const char* output_path, const char* password);
 int xor_decrypt_file(const char* input_path, const char* output_path, const char* password);
