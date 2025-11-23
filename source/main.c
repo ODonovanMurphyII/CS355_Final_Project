@@ -25,6 +25,7 @@ int main(int argc, char* argv[])
     int row = 3;
     int idx = 0;
     file_info* headNode = get_directory_information(dirpath);
+	file_info* currentFile = headNode;	
 
     // Invalid Directory Test
     if (!headNode)
@@ -33,6 +34,16 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Getting the file count
+    while(currentFile->number >= 0)
+    {
+		printf("%s\n", currentFile->filename);
+		++count;
+		currentFile = currentFile->next;
+    }
+    currentFile = headNode;
+	
+
     // Starting the GUI Up...
     initscr();
     cbreak();
@@ -40,22 +51,11 @@ int main(int argc, char* argv[])
     keypad(stdscr, TRUE);
     curs_set(0);
 
-
-    // Getting the file count
-    file_info* currentFile = headNode;
-    while(currentFile->number > 0)
-    {
-		++count;
-		currentFile = currentFile->next;
-    }
-    currentFile = headNode;
-
-
     while (1)
     {
         clear();
-        mvprintw(0, 0, "Simple File Explorer - %s (q to quit)", dirpath);
-        mvprintw(1, 0, "Use arrow keys to navigate. Press Enter to encrypt/decrypt selected file.");
+        mvprintw(0, 0, "Simple File Explorer | Active Directory:%s (q to quit)", dirpath);
+        mvprintw(1, 0, "Use up and down arrow keys to navigate. Press Enter to encrypt/decrypt selected file.\n");
         menu_navigation(headNode, count);
 
 	/*for (currentFile; currentFile->number > 0; currentFile = currentFile->next, ++idx) 
@@ -148,28 +148,35 @@ file_info* menu_navigation(file_info* head, unsigned int fileCount)
 	int keypress;
 	unsigned int pos = 0;
 	file_info* currentFile = head;
-	mvprintw(0, 2, "%d: %s", currentFile->number, currentFile->filename);
-	refresh();
+	mvprintw(2, 0, "%d/%d: %s", currentFile->number, fileCount, currentFile->filename);
 	while(1)
 	{
 		keypress = getch();
-		if(keypress == KEY_DOWN)
-			if(pos == 0)
-				pos = 0;
-			else
-				--pos;
-		if(keypress == KEY_UP)
-			if(pos == fileCount)
-				pos = fileCount;
-			else
-				++pos;
-		if(pos > currentFile->number)
-			while(currentFile->number != pos)				// TODO should probably have some error checking here at some point
-				currentFile = currentFile->next;
-		else if(pos < currentFile->number)
-			while(currentFile->number != pos)
-				currentFile = currentFile->prev;
-		mvprintw(0, 2, "%d: %s", currentFile->number, currentFile->filename);
+		clear();
+		switch(keypress)
+		{
+			case KEY_DOWN:
+				if(pos == 0)
+					pos = 0;
+				else
+					--pos;
+				mvprintw(3,0,"Down Key | Position: %d", pos);
+				break;
+			case KEY_UP:
+				if(pos == fileCount-1)
+					pos = fileCount-1;
+				else
+					++pos;
+				mvprintw(3,0,"Up Key | Position: %d", pos);
+				break;
+			default:
+				// Do nothing
+		}
+		currentFile = head;
+		while(currentFile->number != pos)									// TODO def needs error handling
+			currentFile = currentFile->next;
+		mvprintw(2, 0, "Selected File: %d: %s", currentFile->number, currentFile->filename);
+		refresh();
 	}
 	return NULL; // For now
 }
