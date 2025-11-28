@@ -4,14 +4,15 @@
 #include <string.h>
 #include <stdio.h>
 #include "core.h"
+#include "GUI.h"
 
 
 /* compile: gcc core.c main.c -lncurses -o fileexplorer */
 
 // Prototypes
 static void free_file_list(file_info* head);
-file_info* menu_navigation(file_info* head, unsigned int fileCount);
-int action_menu(file_info* targetFile, char* encryptionPassword);
+file_info* menu_navigation(file_info* head, unsigned int fileCount, WINDOW* window);
+int action_menu(file_info* targetFile, char* encryptionPassword, WINDOW* subWindow);
 int encrypt(file_info* file, char* password);
 
 int main(int argc, char* argv[])
@@ -27,7 +28,11 @@ int main(int argc, char* argv[])
     int count = 0;
     int row = 3;
     int idx = 0;
+	WINDOW* subWindow;
 	char encryptionPassword[MAX_PASSWORD_LEN];
+	char titleString[512];
+	sprintf(titleString,"Simple File Explorer and file encryptor | Active Directory:%s (q to quit)\n",dirpath);
+	char subtitleString[] = "Use up and down arrow keys to navigate. Press Enter to encrypt/decrypt selected file.\n";
     file_info* headNode = get_directory_information(dirpath);
 	file_info* currentFile = headNode;
 	file_info* selectedFile = NULL;
@@ -49,24 +54,25 @@ int main(int argc, char* argv[])
 
 
     // Starting the GUI Up...
-    initscr();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    curs_set(0);
+	gui_init();
+	subWindow = newwin(SUB_WINDOW_HEIGHT, SUB_WINDOW_WIDTH,
+				(LINES-SUB_WINDOW_HEIGHT)/2, (COLS-SUB_WINDOW_WIDTH)/2);
+	keypad(subWindow,TRUE);
+	wbkgd(subWindow, COLOR_PAIR(CP_SUBWINDOW));
+	box(subWindow, 0,0);
+	wrefresh(subWindow);
 
     while (1)
     {
-        clear();
-        mvprintw(0, 0, "Simple File Explorer | Active Directory:%s (q to quit)", dirpath);
-        mvprintw(1, 0, "Use up and down arrow keys to navigate. Press Enter to encrypt/decrypt selected file.\n");
-        selectedFile = menu_navigation(headNode, count);			// Returns selected file (node)
+        mvprintw(LINES/8,(COLS - strlen(titleString))/2,titleString);
+        mvprintw((LINES/8)+1,(COLS - strlen(subtitleString))/2,subtitleString);
+        selectedFile = menu_navigation(headNode, count, subWindow);			// Returns selected file (node)
 		if(selectedFile == NULL)
 		{
 			endwin();
 			return 0;
 		}
-		if(action_menu(selectedFile, encryptionPassword) == 1)
+		if(action_menu(selectedFile, encryptionPassword, subWindow) == 1)
 		{
 			switch(selectedFile->action)
 			{
@@ -144,28 +150,51 @@ int encrypt(file_info* file, char* password)
 
 
 // Blocking function
-file_info* menu_navigation(file_info* head, unsigned int fileCount)
+file_info* menu_navigation(file_info* head, unsigned int fileCount, WINDOW* window)
 {
 	int keypress;
+	int i = 0;
+	int y = 2;
 	unsigned int pos = 0;
 	file_info* currentFile = head;
-	mvprintw(2, 0, "Selected File: %d/%d: %s", currentFile->number+1, fileCount, currentFile->filename);
+	wclear(window);
+	box(window,0,0);
+	refresh();
+	wrefresh(window);				// Set focus to window before enabling cursor
+	while(i < fileCount)
+	{
+		mvwprintw(window,y,2, "%d) %s", i, currentFile->filename);
+		currentFile = currentFile->next;
+		wrefresh(window);
+		++i;
+		++y;
+	}
+	y = 2;
+	curs_set(2);
+	wmove(window,y,2);
+	wrefresh(window);
 	while(1)
 	{
-		keypress = getch();
+		keypress = wgetch(window);
 		switch(keypress)
 		{
-			case KEY_DOWN:
-				if(pos == 0)
-					pos = 0;
-				else
-					--pos;
-				break;
 			case KEY_UP:
+				if(pos == 0)
+				{
+					pos = 0;
+				} else {
+					--pos;
+					--y;
+				}
+				break;
+			case KEY_DOWN:
 				if(pos == fileCount-1)
+				{
 					pos = fileCount-1;
-				else
+				} else {
 					++pos;
+					++y;
+				}
 				break;
 			case KEY_ENTER:
 			case '\n':
@@ -179,59 +208,52 @@ file_info* menu_navigation(file_info* head, unsigned int fileCount)
 			default:
 				// Do nothing
 		}
-		currentFile = head;
-		while(currentFile->number != pos)									// TODO def needs error handling
-			currentFile = currentFile->next;
-		move(2, 0);
-		clrtoeol();
-		mvprintw(2, 0, "Selected File: %d/%d: %s", currentFile->number+1, fileCount, currentFile->filename);
-		refresh();
+#if 0
+		mvwprintw(window,1,10, "Y:%d | POS: %d", y, pos);
+#endif
+		wmove(window,y,2);
+		wrefresh(window);
 	}
 	return NULL; // if we get here, there is an error
 }
 
 // Blocking function
-int action_menu(file_info* targetFile, char* encryptionPassword)
+int action_menu(file_info* targetFile, char* encryptionPassword, WINDOW* menuWindow)
 {
-	clear();
 	int choice;
-	char password[MAX_PASSWORD_LEN]; 
-	WINDOW* menu = newwin(7, 60, 4, 10);
-	box(menu, 0, 0);
-	mvwprintw(menu, 1, 2, "Selected: %s", targetFile->filename);
-	mvwprintw(menu, 2, 2, "e - Encrypt    d - Decrypt    c - Cancel");
-	mvwprintw(menu, 4, 2, "Enter choice: ");
-	wrefresh(menu);
+	char password[MAX_PASSWORD_LEN];
+	wclear(menuWindow);
+	box(menuWindow, 0,0);
+	wrefresh(menuWindow);
+	mvwprintw(menuWindow, 1, 2, "Selected: %s", targetFile->filename);
+	mvwprintw(menuWindow, 2, 2, "e - Encrypt | d - Decrypt | c - Cancel");
+	mvwprintw(menuWindow, 4, 2, "Enter choice:");
+	wrefresh(menuWindow);
 	while(1)
 	{
-		choice = wgetch(menu);
-		if (choice == 'e' || choice == 'd') 
+		choice = wgetch(menuWindow);
+		if (choice == 'e' || choice == 'd')
 		{
-			// prompt for password 
+			// prompt for password
 			echo();
-			curs_set(1);
-			mvwprintw(menu, 4, 2, "Password: ");
-			wclrtoeol(menu);
-			mvwgetnstr(menu, 4, 12, password, sizeof(password)-1);
+			curs_set(2);
+			mvwprintw(menuWindow, 4, 2, "Password: ");
+			wclrtoeol(menuWindow);
+			mvwgetnstr(menuWindow, 4, 12, password, sizeof(password)-1);
 			noecho();
-			curs_set(0);
-			refresh();
+			wrefresh(menuWindow);
 			targetFile->action = choice;		// So we can keep track of what we're doing to the file
 			strcpy(encryptionPassword, password);
-			delwin(menu);
 			return 1;
 		} else if (choice == 'c') {
-			delwin(menu);
 			return 0;
 		} else {
-			mvwprintw(menu, 4, 2, "Invalid Selection - Returning to the Main Menu");
-			wrefresh(menu);
+			mvwprintw(menuWindow, 4, 2, "Invalid Selection - Returning to the Main Menu");
+			wrefresh(menuWindow);
 			napms(2000);
-			delwin(menu);
 			return -1;
 		}
 	}
-
 }
 
 static void free_file_list(file_info* head)
