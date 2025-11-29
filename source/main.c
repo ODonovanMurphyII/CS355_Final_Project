@@ -13,7 +13,8 @@
 static void free_file_list(file_info* head);
 file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* window);
 int action_menu(file_info* targetFile, char* encryptionPassword, WINDOW* subWindow);
-int encrypt(file_info* file, char* password);
+int encrypt(file_info* file, char* password, char* dirpath, WINDOW* window);
+void print_message(int winY, int winX, char* message, WINDOW* window);
 
 int main(int argc, char* argv[])
 {
@@ -113,13 +114,16 @@ int main(int argc, char* argv[])
 				switch(selectedFile->action)
 				{
 					case 'e':
-						encrypt(selectedFile, encryptionPassword); // Run encryption function on file
+						encrypt(selectedFile, encryptionPassword, argv[1], subWindow); // Run encryption function on file
+						break;
 					case 'd':
-						encrypt(selectedFile, encryptionPassword); // Run decryption function on file
+						encrypt(selectedFile, encryptionPassword, argv[1], subWindow); // Run decryption function on file
+						break;
 					default:
 						; // No action to take place here
 				}
 				selectedFile->action = 0;								// Reset after doing the work
+				selectedFile = NULL;
 				encryptionPassword[0] = '\0';							// ...same
 			}
 		} else {
@@ -134,9 +138,10 @@ int main(int argc, char* argv[])
 }
 
 // Encryption/Decryption Function - Returns -1 on failure
-int encrypt(file_info* file, char* password)
+int encrypt(file_info* file, char* password, char* dirpath, WINDOW* window)
 {
 	char tempFilePath[MAX_PATH_LEN];
+	char originalFilePath[MAX_PATH_LEN];
     char buffer;
 	FILE* outputFile;
 	FILE* inputFile;
@@ -144,22 +149,31 @@ int encrypt(file_info* file, char* password)
 	int i = 0;
 	int n = 0;
 
+	sprintf(originalFilePath, "./%s%s", dirpath,file->filename);
 	// Opening input file 
-	inputFile = fopen(file->filename, "wb");				// Opening with write access so we can delete later
+	inputFile = fopen(originalFilePath, "wb");				// Opening with write access so we can delete later
 	if(inputFile == NULL)
 	{
-		// TODO Print an error message here
+		// TODO need error message here
 		exit(EXIT_FAILURE);
 	}
 
+	print_message(5,5,"Encrypting File at:", window);
+	print_message(6,5,originalFilePath,window);
+	napms(1000);
+
 	// Creating temporary file to work with
-	snprintf(tempFilePath, sizeof(file->filename), "%s.enc", file->filename); //TODO needs error checking and overflow prevention
+	sprintf(tempFilePath, "./%s%s.enc", dirpath,file->filename); //TODO needs error checking and overflow prevention
 	outputFile = fopen(tempFilePath, "wb");
 	if(outputFile == NULL)
 	{
-		// TODO Print an error message here
+		// TODO need error message here
 		exit(EXIT_FAILURE);
 	}
+
+	print_message(7,5,"Creating temporary file:", window);
+	print_message(8,5,tempFilePath,window);
+	napms(1000);
 
 	passlen = strlen(password);
 	if(passlen == 0)
@@ -177,6 +191,13 @@ int encrypt(file_info* file, char* password)
         //offset += n;
         fwrite(&buffer, 1, 1, outputFile) != n; 		// TODO need to check for errors
     }
+
+	print_message(9,5,"Encryption Complete! Press any key to continue!", window);
+	wrefresh(window);
+	wgetch(window);
+	wclear(window);
+	box(window,0,0);
+	wrefresh(window);
 
 	// Deleting the original file and replacing it with the encrypted version
 	remove(file->filename);
@@ -351,6 +372,12 @@ int action_menu(file_info* targetFile, char* encryptionPassword, WINDOW* menuWin
 			return -1;
 		}
 	}
+}
+
+void print_message(int winY, int winX, char* message, WINDOW* window)
+{
+	mvwprintw(window,winY,winX,"%s", message);
+	wrefresh(window);
 }
 
 static void free_file_list(file_info* head)
