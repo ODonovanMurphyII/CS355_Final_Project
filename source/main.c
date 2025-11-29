@@ -11,7 +11,7 @@
 
 // Prototypes
 static void free_file_list(file_info* head);
-file_info* menu_navigation(file_info* head, unsigned int fileCount, WINDOW* window);
+file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* window);
 int action_menu(file_info* targetFile, char* encryptionPassword, WINDOW* subWindow);
 int encrypt(file_info* file, char* password);
 
@@ -28,6 +28,7 @@ int main(int argc, char* argv[])
     int count = 0;
     int row = 3;
     int idx = 0;
+	unsigned int pageCount = 1;
 	WINDOW* subWindow;
 	char encryptionPassword[MAX_PASSWORD_LEN];
 	char titleString[512];
@@ -36,6 +37,8 @@ int main(int argc, char* argv[])
     file_info* headNode = get_directory_information(dirpath);
 	file_info* currentFile = headNode;
 	file_info* selectedFile = NULL;
+	page firstMenuPage;
+	page* currentPage = &firstMenuPage;
 
 	// Invalid Directory Test
     if (!headNode)
@@ -44,14 +47,42 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Getting the file count
+    // Getting the file count and setting up pages
+	firstMenuPage.headFileNode = currentFile;
+	firstMenuPage.prev = NULL;
+	firstMenuPage.next = NULL;
+	firstMenuPage.pageNumber = 1;
     while(currentFile->number >= 0)
     {
 		++count;
 		currentFile = currentFile->next;
+		if(currentFile->number >= 0 && (count % MAX_ENTRY_PER_PAGE) == 0)			// Time to setup a new page
+		{
+			currentPage->next = malloc(sizeof(page));
+			currentPage->next->prev = currentPage;
+			currentPage = currentPage->next;
+			currentPage->next = NULL;
+			currentPage->headFileNode = currentFile;
+			++pageCount;
+			currentPage->pageNumber = pageCount;
+		}
     }
-    currentFile = headNode;
+	currentPage = &firstMenuPage;
 
+#if 0	// Debug test for page creation
+	while(currentPage->next != NULL)
+	{
+		printf("%s\n",currentPage->headFileNode->filename);
+		getc(stdin);
+		currentPage = currentPage->next;
+	}
+	printf("%s\n", currentPage->headFileNode->filename);
+	printf("%d\n", pageCount);
+	getc(stdin);
+#endif
+
+	// Setting up pages
+	int i = 0;
 
     // Starting the GUI Up...
 	gui_init();
@@ -66,7 +97,7 @@ int main(int argc, char* argv[])
     {
         mvprintw(LINES/8,(COLS - strlen(titleString))/2,titleString);
         mvprintw((LINES/8)+1,(COLS - strlen(subtitleString))/2,subtitleString);
-        selectedFile = menu_navigation(headNode, count, subWindow);			// Returns selected file (node)
+        selectedFile = menu_navigation(currentPage,pageCount,subWindow);			// Returns selected file (node)
 		if(selectedFile == NULL)
 		{
 			endwin();
@@ -138,7 +169,7 @@ int encrypt(file_info* file, char* password)
         //offset += n;
         fwrite(&buffer, 1, 1, outputFile) != n; 		// TODO need to check for errors
     }
-	
+
 	// Deleting the original file and replacing it with the encrypted version
 	remove(file->filename);
 	rename(tempFilePath,  file->filename);				// TODO needs error checking
@@ -149,19 +180,19 @@ int encrypt(file_info* file, char* password)
 }
 
 // Blocking function
-file_info* menu_navigation(file_info* head, unsigned int fileCount, WINDOW* window)
+file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* window)
 {
 	int keypress;
 	int i = 0;
 	int y = 2;
 	unsigned int pos = 0;
 	int maxY = 0;
-	file_info* currentFile = head;
+	file_info* currentFile = currentPage->headFileNode;
 	wclear(window);
 	box(window,0,0);
 	refresh();
 	wrefresh(window);				// Set focus to window before enabling cursor
-	while(currentFile->number != -1 && i < 10)
+	while(currentFile->number != -1 && i < MAX_ENTRY_PER_PAGE)			// TODO could probably be a subroutine
 	{
 		mvwprintw(window,y,2, "%d) %s", i, currentFile->filename);
 		currentFile = currentFile->next;
@@ -170,7 +201,7 @@ file_info* menu_navigation(file_info* head, unsigned int fileCount, WINDOW* wind
 		++y;
 	}
 	maxY = getmaxy(window);
-	mvwprintw(window, maxY-2, 1, "Prev 10 Files: Left Arrow | Next 10 Files: Right Arrow");
+	mvwprintw(window,maxY-2,1,"Page:%d/%d | Prev 10 Files:Left Arrow | Next 10 Files:Right Arrow",currentPage->pageNumber,pageCount);
 	y = 2;
 	curs_set(2);
 	wmove(window,y,2);
@@ -190,9 +221,9 @@ file_info* menu_navigation(file_info* head, unsigned int fileCount, WINDOW* wind
 				}
 				break;
 			case KEY_DOWN:
-				if(pos == fileCount-1)
+				if(pos == MAX_ENTRY_PER_PAGE)
 				{
-					pos = fileCount-1;
+					pos = MAX_ENTRY_PER_PAGE-1;
 				} else {
 					++pos;
 					++y;
@@ -200,14 +231,50 @@ file_info* menu_navigation(file_info* head, unsigned int fileCount, WINDOW* wind
 				break;
 			case KEY_ENTER:
 			case '\n':
-				currentFile = head;
-				while(currentFile->number != pos)
+				currentFile = currentPage->headFileNode;
+				// Determing where the file is in the menu list
+				int menuMap = 0;
+				do
+				{
+					currentFile->menuNumber = menuMap;
 					currentFile = currentFile->next;
+					++menuMap;
+				}while(currentFile->number != -1);
+#if 0
+				mvwprintw(window,1,10, "Filename: %s | Pos: %d | Menu Map: %d", currentFile->filename, pos, menuMap);
+				wrefresh(window);
+				wgetch(window);
+#endif
+				currentFile = currentPage->headFileNode;
+				while(currentFile->menuNumber != pos)
+				{
+					currentFile = currentFile->next;
+#if 0
+					mvwprintw(window,1,10, "%s", currentFile->filename);
+					wrefresh(window);
+					wgetch(window);
+#endif
+				}
+#if 0
+				mvwprintw(window,1,10, "%s", currentFile->filename);
+				wrefresh(window);
+				wgetch(window);
+#endif
 				return currentFile;
 				break;
 			case KEY_LEFT:
+				if(currentPage->prev != NULL)
+				{
+					menu_navigation(currentPage->prev,pageCount,window);
+					return 0;
+				}
 				break;
 			case KEY_RIGHT:
+				if(currentPage->next != NULL)
+				{
+					menu_navigation(currentPage->next,pageCount,window);
+					return 0;
+				}
 				break;
 			case 'q':
 				return NULL;
