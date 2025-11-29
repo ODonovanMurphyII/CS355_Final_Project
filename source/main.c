@@ -26,6 +26,7 @@ int main(int argc, char* argv[])
     const char* dirpath = argv[1];
     int highlight = 0;
     int count = 0;
+	unsigned int entryCountForCurPage = 0;
     int row = 3;
     int idx = 0;
 	unsigned int pageCount = 1;
@@ -55,9 +56,14 @@ int main(int argc, char* argv[])
     while(currentFile->number >= 0)
     {
 		++count;
+		++entryCountForCurPage;
+		//printf("%d\n", entryCountForCurPage);
+		//getc(stdin);
 		currentFile = currentFile->next;
 		if(currentFile->number >= 0 && (count % MAX_ENTRY_PER_PAGE) == 0)			// Time to setup a new page
 		{
+			currentPage->entryCount = entryCountForCurPage;
+			entryCountForCurPage = 0;
 			currentPage->next = malloc(sizeof(page));
 			currentPage->next->prev = currentPage;
 			currentPage = currentPage->next;
@@ -68,6 +74,8 @@ int main(int argc, char* argv[])
 		}
     }
 	currentPage = &firstMenuPage;
+	//printf("%d\n", entryCountForCurPage);
+	//getc(stdin);
 
 #if 0	// Debug test for page creation
 	while(currentPage->next != NULL)
@@ -98,26 +106,26 @@ int main(int argc, char* argv[])
         mvprintw(LINES/8,(COLS - strlen(titleString))/2,titleString);
         mvprintw((LINES/8)+1,(COLS - strlen(subtitleString))/2,subtitleString);
         selectedFile = menu_navigation(currentPage,pageCount,subWindow);			// Returns selected file (node)
-		if(selectedFile == NULL)
+		if(selectedFile != NULL)
 		{
-			endwin();
-			return 0;
-		}
-		if(action_menu(selectedFile, encryptionPassword, subWindow) == 1)
-		{
-			switch(selectedFile->action)
+			if(action_menu(selectedFile, encryptionPassword, subWindow) == 1)
 			{
-				case 'e':
-					encrypt(selectedFile, encryptionPassword); // Run encryption function on file
-				case 'd':
-					encrypt(selectedFile, encryptionPassword); // Run decryption function on file
-				default:
-					; // No action to take place here
+				switch(selectedFile->action)
+				{
+					case 'e':
+						encrypt(selectedFile, encryptionPassword); // Run encryption function on file
+					case 'd':
+						encrypt(selectedFile, encryptionPassword); // Run decryption function on file
+					default:
+						; // No action to take place here
+				}
+				selectedFile->action = 0;								// Reset after doing the work
+				encryptionPassword[0] = '\0';							// ...same
 			}
-			selectedFile->action = 0;								// Reset after doing the work
-			encryptionPassword[0] = '\0';							// ...same
 		} else {
-
+			mvwprintw(subWindow,getmaxy(subWindow)-10,1,"Memory Error Detected - Returning to Main Menu");
+			wrefresh(subWindow);
+			napms(1000);
 		}
 	}
     endwin();
@@ -186,6 +194,7 @@ file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* wi
 	int i = 0;
 	int y = 2;
 	unsigned int pos = 0;
+	unsigned int maxCursorPos = 0;
 	int maxY = 0;
 	file_info* currentFile = currentPage->headFileNode;
 	wclear(window);
@@ -199,9 +208,12 @@ file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* wi
 		wrefresh(window);
 		++i;
 		++y;
+		++maxCursorPos;
 	}
+	--maxCursorPos;
 	maxY = getmaxy(window);
-	mvwprintw(window,maxY-2,1,"Page:%d/%d | Prev 10 Files:Left Arrow | Next 10 Files:Right Arrow",currentPage->pageNumber,pageCount);
+	mvwprintw(window,maxY-2,1,"Page:%d/%d| EC: %d | Prev %d Files:<- | Next %d Files:->",currentPage->pageNumber,
+	pageCount,maxCursorPos+1, MAX_ENTRY_PER_PAGE, MAX_ENTRY_PER_PAGE);
 	y = 2;
 	curs_set(2);
 	wmove(window,y,2);
@@ -221,18 +233,24 @@ file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* wi
 				}
 				break;
 			case KEY_DOWN:
-				if(pos == MAX_ENTRY_PER_PAGE)
+				if(pos == maxCursorPos)
 				{
-					pos = MAX_ENTRY_PER_PAGE-1;
+					pos = maxCursorPos;
 				} else {
 					++pos;
 					++y;
+#if 0
+				mvwprintw(window,1,5, "Found File %s | Pos: %d | Page Entry Count: %d", currentPage->headFileNode->filename,
+								pos, maxCursorPos);
+				wrefresh(window);
+				wgetch(window);
+#endif
 				}
 				break;
 			case KEY_ENTER:
 			case '\n':
 				currentFile = currentPage->headFileNode;
-				// Determing where the file is in the menu list
+				// Determing where each file is on this page
 				int menuMap = 0;
 				do
 				{
@@ -250,13 +268,15 @@ file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* wi
 				{
 					currentFile = currentFile->next;
 #if 0
-					mvwprintw(window,1,10, "%s", currentFile->filename);
+					mvwprintw(window,1,5, "Current File %s | Pos: %d | Current menuNumber: %d", currentFile->filename,
+								pos, currentFile->menuNumber);
 					wrefresh(window);
 					wgetch(window);
 #endif
 				}
 #if 0
-				mvwprintw(window,1,10, "%s", currentFile->filename);
+				mvwprintw(window,1,5, "Found File %s | Pos: %d | Current menuNumber: %d", currentFile->filename,
+								pos, currentFile->menuNumber);
 				wrefresh(window);
 				wgetch(window);
 #endif
@@ -266,18 +286,19 @@ file_info* menu_navigation(page* currentPage, unsigned int pageCount, WINDOW* wi
 				if(currentPage->prev != NULL)
 				{
 					menu_navigation(currentPage->prev,pageCount,window);
-					return 0;
+					return NULL;
 				}
 				break;
 			case KEY_RIGHT:
 				if(currentPage->next != NULL)
 				{
 					menu_navigation(currentPage->next,pageCount,window);
-					return 0;
+					return NULL;
 				}
 				break;
-			case 'q':
-				return NULL;
+			case 'q':								// Cheap way to exit out for now. Letting the OS do the heavy lifting
+				endwin();
+				exit(0);
 			default:
 				// Do nothing
 		}

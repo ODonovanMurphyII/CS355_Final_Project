@@ -9,7 +9,7 @@
 #define MAX_PATH_LEN 1024
 #define FILETYPE_LEN 35
 #define MAX_PASSWORD_LEN 128
-#define MAX_ENTRY_PER_PAGE 2
+#define MAX_ENTRY_PER_PAGE 10
 
 /* forward-declare struct so typedef works */
 typedef struct file_info 
@@ -31,6 +31,7 @@ typedef struct page
 {
 	file_info* headFileNode;
 	unsigned int pageNumber;
+	unsigned int entryCount;
 	struct page* next;
 	struct page* prev;
 }page;
