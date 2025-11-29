@@ -4,7 +4,6 @@
 #include <stddef.h> 
 
 //constants for prime number selection 
-//use in the .C file
 extern int PRIMES[];
 extern int NUM_PRIMES;
 
