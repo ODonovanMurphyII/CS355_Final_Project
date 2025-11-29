@@ -142,16 +142,16 @@ int encrypt(file_info* file, char* password, char* dirpath, WINDOW* window)
 {
 	char tempFilePath[MAX_PATH_LEN];
 	char originalFilePath[MAX_PATH_LEN];
-    char buffer;
+    char buffer = 0x31;				// For testing, will change dynamically
 	FILE* outputFile;
 	FILE* inputFile;
 	size_t passlen;
-	int i = 0;
-	int n = 0;
+	unsigned int i = 0;
+	size_t n = 0;
 
 	sprintf(originalFilePath, "./%s%s", dirpath,file->filename);
-	// Opening input file 
-	inputFile = fopen(originalFilePath, "wb");				// Opening with write access so we can delete later
+	// Opening input file
+	inputFile = fopen(originalFilePath, "rb");				// Read only access for now
 	if(inputFile == NULL)
 	{
 		// TODO need error message here
@@ -181,15 +181,18 @@ int encrypt(file_info* file, char* password, char* dirpath, WINDOW* window)
 		fclose(inputFile);
 		fclose(outputFile);
 		// TODO Print an error message
+		print_message(7,5, "Error: Password cannot be zero length",window);
+		napms(1000);
 		return -1;
 	}
 
 	// Starting encryption/decryption
-	while ((n = fread(&buffer, 1, 1, inputFile)) > 0) 
+	i = 0;
+	while ((n = fread(&buffer, 1, 1, inputFile)) > 0)
 	{
-        buffer ^= (unsigned char)password[(i) % passlen];		// note to Sadie: why use the offset? % passlen is very clever!
-        //offset += n;
-        fwrite(&buffer, 1, 1, outputFile) != n; 		// TODO need to check for errors
+		++i;
+        buffer ^= (unsigned char)password[i % passlen];
+        fwrite(&buffer, 1, 1, outputFile) != n;
     }
 
 	print_message(9,5,"Encryption Complete! Press any key to continue!", window);
@@ -200,8 +203,8 @@ int encrypt(file_info* file, char* password, char* dirpath, WINDOW* window)
 	wrefresh(window);
 
 	// Deleting the original file and replacing it with the encrypted version
-	remove(file->filename);
-	rename(tempFilePath,  file->filename);				// TODO needs error checking
+	//remove(file->filename);
+	//rename(tempFilePath,  file->filename);				// TODO needs error checking
 
 	fclose(inputFile);
 	fclose(outputFile);
